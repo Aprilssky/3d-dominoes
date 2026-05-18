@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D 多米诺骨牌</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🁎</text></svg>" />
+</head>
+<body>
+  <div id="app">
+    <div id="toolbar">
+      <div class="tool-group">
+        <button class="tool-btn active" data-tool="place" title="放置模式 (1)">🖐 放置</button>
+        <button class="tool-btn" data-tool="delete" title="删除模式 (2)">🗑 删除</button>
+        <button class="tool-btn" data-tool="move" title="移动模式 (3)">✋ 移动</button>
+      </div>
+      <div class="tool-sep"></div>
+      <div class="tool-group">
+        <button id="btn-start" class="tool-btn primary" title="推倒！">▶ 推倒</button>
+        <button id="btn-reset-physics" class="tool-btn" title="复原">↺ 复原</button>
+      </div>
+      <div class="tool-sep"></div>
+      <div class="tool-group">
+        <button id="btn-save" class="tool-btn" title="保存到本地">💾 保存</button>
+        <button id="btn-load" class="tool-btn" title="从本地加载">📂 加载</button>
+        <button id="btn-export" class="tool-btn" title="导出为文件">⬇ 导出</button>
+        <button id="btn-import" class="tool-btn" title="从文件导入">⬆ 导入</button>
+      </div>
+      <div class="tool-sep"></div>
+      <div class="tool-group">
+        <button id="btn-clear" class="tool-btn danger" title="清空所有">✕ 清空</button>
+      </div>
+      <div class="tool-spacer"></div>
+      <div class="tool-info">
+        <span id="domino-count">🁎 0</span>
+        <span id="mode-label">放置模式</span>
+      </div>
+    </div>
+    <div id="canvas-container"></div>
+    <div id="status-bar">
+      <span>左键点击放置 · 右键拖动视角 · 滚轮缩放 · Shift+拖拽画线</span>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
