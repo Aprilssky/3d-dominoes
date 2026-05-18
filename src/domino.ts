@@ -78,8 +78,8 @@ export function createDominoBody(): CANNON.Body {
   const body = new CANNON.Body({
     mass: 0.5,
     material: mat,
-    linearDamping: 0.05,
-    angularDamping: 0.3,
+    linearDamping: 0.1,
+    angularDamping: 0.6,
     shape: new CANNON.Box(
       new CANNON.Vec3(DOMINO_W / 2, DOMINO_H / 2, DOMINO_D / 2)
     ),
@@ -153,21 +153,22 @@ export function activatePhysics(dominoes: DominoObject[], world: CANNON.World) {
  * Apply topple impulse to a specific domino in its facing direction.
  * Domino's thin side is local Z axis → world direction = (sin(rot), 0, cos(rot))
  */
-export function toppleDominoAt(target: DominoObject, impulseStrength = 1.8) {
+export function toppleDominoAt(target: DominoObject, impulseStrength = 0.8) {
   const rot = target.data.rotation
   // Fall direction: local Z axis of domino (thin side)
+  // Just a horizontal push at the top — gravity + collision does the rest
   const dir = new CANNON.Vec3(
     Math.sin(rot),
-    0.2,   // slight upward to help it tip
+    0.1,
     Math.cos(rot)
   )
   dir.normalize()
   dir.scale(impulseStrength, dir)
 
-  // Apply impulse near the top of the domino
+  // Apply impulse near the top to tip it over
   const wp = new CANNON.Vec3(
     target.body.position.x,
-    DOMINO_H * 0.8,
+    DOMINO_H * 0.85,
     target.body.position.z
   )
   target.body.applyImpulse(dir, wp)
