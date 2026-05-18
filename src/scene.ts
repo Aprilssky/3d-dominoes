@@ -4,7 +4,7 @@ import * as CANNON from 'cannon-es'
 import {
   DOMINO_W, DOMINO_H, DOMINO_D, DOMINO_GAP,
   buildDomino, removeDomino, randomColor, generateId, resetIdCounter, syncIdCounter,
-  toppleDominoes, resetPhysics, createPhysicsWorld,
+  activatePhysics, toppleDominoAt, resetPhysics, createPhysicsWorld,
   DominoData, DominoObject,
 } from './domino'
 import { saveToLocal, loadFromLocal, exportToFile, importFromFile } from './storage'
@@ -20,11 +20,15 @@ export class DominoScene {
 
   private dominoes: DominoObject[] = []
   private clock = new THREE.Clock()
-  private animating = false
 
   // Tool state
   private toolMode: ToolMode = 'place'
   private isPlaying = false
+  private toppleTriggered = false
+
+  // Hover highlight
+  private hoveredDomino: DominoObject | null = null
+  private hoverHighlight: THREE.Mesh | null = null
 
   // Raycasting
   private raycaster = new THREE.Raycaster()
@@ -35,7 +39,7 @@ export class DominoScene {
   private isShiftDown = false
   private lineStart: THREE.Vector3 | null = null
 
-  // Selected domino for move mode
+  // Selected domino for delete/move
   private selectedDomino: DominoObject | null = null
   private selectionRing: THREE.Mesh | null = null
 
@@ -102,15 +106,11 @@ export class DominoScene {
   }
 
   private setupLights() {
-    // Ambient
     const ambient = new THREE.AmbientLight(0x404060, 0.5)
     this.scene.add(ambient)
-
-    // Hemisphere
     const hemi = new THREE.HemisphereLight(0x8888ff, 0x444422, 0.6)
     this.scene.add(hemi)
 
-    // Main directional (sun)
     const sun = new THREE.DirectionalLight(0xffeedd, 1.5)
     sun.position.set(10, 15, 8)
     sun.castShadow = true
@@ -124,20 +124,17 @@ export class DominoScene {
     sun.shadow.camera.bottom = -15
     this.scene.add(sun)
 
-    // Fill light
     const fill = new THREE.DirectionalLight(0x8888ff, 0.4)
     fill.position.set(-5, 3, -8)
     this.scene.add(fill)
   }
 
   private setupGround() {
-    // Visual ground
     const gridSize = 20
     const gridHelper = new THREE.GridHelper(gridSize, 20, 0x6666aa, 0x444466)
     gridHelper.position.y = -0.01
     this.scene.add(gridHelper)
 
-    // Translucent ground plane for click detection
     const planeGeo = new THREE.PlaneGeometry(gridSize, gridSize)
     const planeMat = new THREE.MeshStandardMaterial({
       transparent: true,
@@ -164,7 +161,6 @@ export class DominoScene {
     canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e))
     canvas.addEventListener('contextmenu', (e) => e.preventDefault())
 
-    // Keyboard
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Shift') this.isShiftDown = true
       if (e.key === '1') this.setTool('place')
@@ -214,22 +210,30 @@ export class DominoScene {
     return null
   }
 
-  // Shift+drag to place a line
   private onMouseDown(e: MouseEvent) {
     if (e.button !== 0) return
 
+    // --- PLAY MODE: click domino to topple ---
+    if (this.isPlaying && !this.toppleTriggered) {
+      const domino = this.getDominoIntersection(e.clientX, e.clientY)
+      if (domino) {
+        activatePhysics(this.dominoes, this.world)
+        toppleDominoAt(domino, 1.8)
+        this.toppleTriggered = true
+      }
+      return
+    }
+
     if (this.toolMode === 'place') {
       if (this.isShiftDown) {
-        // Start line draw
         const pos = this.getGroundIntersection(e.clientX, e.clientY)
         if (pos) {
           this.lineStart = pos.clone()
-          // Place first domino
           this.placeDomino(pos.x, pos.z)
         }
       } else {
         const pos = this.getGroundIntersection(e.clientX, e.clientY)
-        if (pos && !this.isPlaying) {
+        if (pos) {
           this.placeDomino(pos.x, pos.z)
         }
       }
@@ -261,6 +265,21 @@ export class DominoScene {
   }
 
   private onMouseMove(e: MouseEvent) {
+    // --- Play mode hover highlight ---
+    if (this.isPlaying && !this.toppleTriggered) {
+      const domino = this.getDominoIntersection(e.clientX, e.clientY)
+      if (domino !== this.hoveredDomino) {
+        this.removeHoverHighlight()
+        if (domino) {
+          this.showHoverHighlight(domino)
+        }
+        this.hoveredDomino = domino
+        // Update cursor
+        this.renderer.domElement.style.cursor = domino ? 'pointer' : 'crosshair'
+      }
+      return
+    }
+
     if (this.toolMode === 'place' && this.isShiftDown && this.lineStart) {
       const pos = this.getGroundIntersection(e.clientX, e.clientY)
       if (pos) {
@@ -268,17 +287,14 @@ export class DominoScene {
         const dz = pos.z - this.lineStart.z
         const dist = Math.sqrt(dx * dx + dz * dz)
         if (dist > DOMINO_W + DOMINO_GAP) {
-          // Place along the line at intervals
-          // We'll use angle from start
           const angle = Math.atan2(dz, dx)
-          // Number of dominoes to fill
           const spacing = DOMINO_W + DOMINO_GAP
           const count = Math.floor(dist / spacing)
           for (let i = 0; i < count; i++) {
             const ratio = (i + 1) / count
             const x = this.lineStart.x + dx * ratio
             const z = this.lineStart.z + dz * ratio
-            this.placeDomino(x, z, -angle) // perpendicular to line
+            this.placeDomino(x, z, -angle)
           }
           this.lineStart = pos.clone()
         }
@@ -306,16 +322,13 @@ export class DominoScene {
   // ======== Domino Operations ========
   placeDomino(x: number, z: number, rotation?: number) {
     if (this.isPlaying) return
-
-    // Clamp to grid area
     const halfSize = 9
     x = Math.max(-halfSize, Math.min(halfSize, x))
     z = Math.max(-halfSize, Math.min(halfSize, z))
 
     const data: DominoData = {
       id: generateId(),
-      x,
-      z,
+      x, z,
       rotation: rotation ?? 0,
       color: randomColor(),
     }
@@ -341,7 +354,10 @@ export class DominoScene {
     resetIdCounter()
     this.selectedDomino = null
     this.removeSelectionRing()
+    this.hoveredDomino = null
+    this.removeHoverHighlight()
     this.isPlaying = false
+    this.toppleTriggered = false
     this.onPlayChange?.(false)
     this.onCountChange?.(0)
   }
@@ -349,17 +365,49 @@ export class DominoScene {
   startPlay() {
     if (this.dominoes.length === 0 || this.isPlaying) return
     this.isPlaying = true
+    this.toppleTriggered = false
     this.onPlayChange?.(true)
-    toppleDominoes(this.dominoes, this.world)
+    this.renderer.domElement.style.cursor = 'crosshair'
   }
 
   resetPlay() {
     if (!this.isPlaying) return
     this.isPlaying = false
+    this.toppleTriggered = false
     this.onPlayChange?.(false)
     resetPhysics(this.dominoes, this.world)
-    this.removeSelectionRing()
     this.selectedDomino = null
+    this.removeSelectionRing()
+    this.hoveredDomino = null
+    this.removeHoverHighlight()
+    this.renderer.domElement.style.cursor = ''
+  }
+
+  // ======== Hover Highlight ========
+  private showHoverHighlight(obj: DominoObject) {
+    this.removeHoverHighlight()
+    const geo = new THREE.BoxGeometry(DOMINO_W + 0.08, DOMINO_H + 0.08, DOMINO_D + 0.08)
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.15,
+      depthWrite: false,
+    })
+    this.hoverHighlight = new THREE.Mesh(geo, mat)
+    this.hoverHighlight.position.copy(obj.mesh.position)
+    this.hoverHighlight.quaternion.copy(obj.mesh.quaternion)
+    this.scene.add(this.hoverHighlight)
+  }
+
+  private removeHoverHighlight() {
+    if (this.hoverHighlight) {
+      this.scene.remove(this.hoverHighlight)
+      this.hoverHighlight.geometry.dispose()
+      const mat = this.hoverHighlight.material
+      if (Array.isArray(mat)) mat.forEach(m => m.dispose())
+      else mat.dispose()
+      this.hoverHighlight = null
+    }
   }
 
   // ======== Selection Ring ========
@@ -395,7 +443,7 @@ export class DominoScene {
   // ======== Tool ========
   setTool(mode: ToolMode) {
     this.toolMode = mode
-    if (mode !== 'move') {
+    if (mode !== 'delete') {
       this.selectedDomino = null
       this.removeSelectionRing()
     }
@@ -413,7 +461,6 @@ export class DominoScene {
     this.clearAll()
     const data = loadFromLocal()
     if (!data) return false
-
     let maxId = 0
     for (const d of data) {
       if (d.id > maxId) maxId = d.id
@@ -452,10 +499,8 @@ export class DominoScene {
       const dt = this.clock.getDelta()
       this.controls.update()
 
-      // Step physics if playing
       if (this.isPlaying) {
         this.world.step(1 / 60, dt, 3)
-        // Sync meshes to physics bodies
         for (const d of this.dominoes) {
           d.mesh.position.copy(d.body.position as unknown as THREE.Vector3)
           d.mesh.position.y += DOMINO_H / 2
@@ -477,7 +522,6 @@ export class DominoScene {
     this.renderer.setSize(w, h)
   }
 
-  // ======== Cleanup ========
   dispose() {
     this.renderer.dispose()
     this.scene.traverse((obj) => {

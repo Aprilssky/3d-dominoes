@@ -147,24 +147,36 @@ export function syncIdCounter(maxId: number) {
   }
 }
 
-export function toppleDominoes(dominoes: DominoObject[], world: CANNON.World) {
-  if (dominoes.length === 0) return
-
-  // Switch all to dynamic
+export function activatePhysics(dominoes: DominoObject[], world: CANNON.World) {
   for (const d of dominoes) {
     d.body.type = CANNON.Body.DYNAMIC
     d.body.mass = 0.5
     d.body.updateMassProperties()
-    // Wake up
     d.body.wakeUp()
   }
+}
 
-  // Push the first domino
-  const first = dominoes[0]
-  const dir = new CANNON.Vec3(0, 0.3, -1)
-  // Apply impulse at top of domino
-  const worldPoint = new CANNON.Vec3(first.body.position.x, DOMINO_H * 0.6, first.body.position.z)
-  first.body.applyImpulse(dir, worldPoint)
+/**
+ * Apply topple impulse to a specific domino in its facing direction.
+ * Domino's thin side is local Z axis → world direction = (sin(rot), 0, cos(rot))
+ */
+export function toppleDominoAt(target: DominoObject, impulseStrength = 1.5) {
+  const rot = target.data.rotation
+  // Fall direction: local Z axis of domino (thin side)
+  const dir = new CANNON.Vec3(
+    Math.sin(rot),
+    0.3,   // slight upward to help it tip
+    Math.cos(rot)
+  )
+  dir.normalize()
+  dir.scale(impulseStrength, dir)
+
+  const wp = new CANNON.Vec3(
+    target.body.position.x,
+    DOMINO_H * 0.6,
+    target.body.position.z
+  )
+  target.body.applyImpulse(dir, wp)
 }
 
 export function resetPhysics(dominoes: DominoObject[], world: CANNON.World) {

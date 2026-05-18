@@ -7,19 +7,26 @@ const scene = new DominoScene(container)
 
 // ======== UI Bindings ========
 
-// --- Count + Play state ---
 scene.setCallbacks({
   onCountChange: (n) => {
     document.getElementById('domino-count')!.textContent = `🁎 ${n}`
   },
   onPlayChange: (playing) => {
     const btn = document.getElementById('btn-start')!
+    const modeLabel = document.getElementById('mode-label')!
     if (playing) {
-      btn.textContent = '⋯ 进行中'
+      btn.textContent = '🎯 点击骨牌'
       btn.classList.add('running')
+      modeLabel.textContent = '点击要推倒的骨牌'
     } else {
       btn.textContent = '▶ 推倒'
       btn.classList.remove('running')
+      const activeTool = document.querySelector('.tool-btn[data-tool].active') as HTMLElement
+      if (activeTool) {
+        activeTool.click()
+      } else {
+        modeLabel.textContent = '放置模式'
+      }
     }
     document.getElementById('btn-reset-physics')!.style.display = playing ? 'inline-block' : 'none'
   },
@@ -35,7 +42,7 @@ toolBtns.forEach(btn => {
     btn.classList.add('active')
 
     const labels: Record<ToolMode, string> = {
-      place: '放置模式',
+      place: '放置模式 — 点击地面放骨牌',
       delete: '删除模式 — 单击选中/双击删除',
       move: '移动模式',
     }
