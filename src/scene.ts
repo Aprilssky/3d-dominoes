@@ -503,7 +503,6 @@ export class DominoScene {
         this.world.step(1 / 60, dt, 3)
         for (const d of this.dominoes) {
           d.mesh.position.copy(d.body.position as unknown as THREE.Vector3)
-          d.mesh.position.y += DOMINO_H / 2
           d.mesh.quaternion.copy(d.body.quaternion as unknown as THREE.Quaternion)
         }
       }

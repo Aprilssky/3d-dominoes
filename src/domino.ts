@@ -89,13 +89,6 @@ export function createDominoBody(): CANNON.Body {
   return body
 }
 
-export function syncMeshToBody(mesh: THREE.Mesh, body: CANNON.Body, yOffset = DOMINO_H / 2) {
-  mesh.position.copy(body.position as unknown as THREE.Vector3)
-  mesh.position.y += yOffset
-  mesh.quaternion.copy(body.quaternion as unknown as THREE.Quaternion)
-  // Convert CANNON rotation to be on-ground-plane centered
-}
-
 export function buildDomino(
   scene: THREE.Scene,
   world: CANNON.World,
@@ -104,11 +97,11 @@ export function buildDomino(
   const mesh = createDominoMesh(data.color)
   const body = createDominoBody()
 
-  // Position
-  body.position.set(data.x, 0, data.z)
+  // Body centered at DOMINO_H/2 so its bottom touches ground (y=0)
+  body.position.set(data.x, DOMINO_H / 2, data.z)
   body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), data.rotation)
 
-  // Sync mesh
+  // Mesh at same position as body (center of domino)
   mesh.position.set(data.x, DOMINO_H / 2, data.z)
   mesh.rotation.y = data.rotation
 
@@ -160,20 +153,21 @@ export function activatePhysics(dominoes: DominoObject[], world: CANNON.World) {
  * Apply topple impulse to a specific domino in its facing direction.
  * Domino's thin side is local Z axis → world direction = (sin(rot), 0, cos(rot))
  */
-export function toppleDominoAt(target: DominoObject, impulseStrength = 1.5) {
+export function toppleDominoAt(target: DominoObject, impulseStrength = 1.8) {
   const rot = target.data.rotation
   // Fall direction: local Z axis of domino (thin side)
   const dir = new CANNON.Vec3(
     Math.sin(rot),
-    0.3,   // slight upward to help it tip
+    0.2,   // slight upward to help it tip
     Math.cos(rot)
   )
   dir.normalize()
   dir.scale(impulseStrength, dir)
 
+  // Apply impulse near the top of the domino
   const wp = new CANNON.Vec3(
     target.body.position.x,
-    DOMINO_H * 0.6,
+    DOMINO_H * 0.8,
     target.body.position.z
   )
   target.body.applyImpulse(dir, wp)
@@ -184,14 +178,14 @@ export function resetPhysics(dominoes: DominoObject[], world: CANNON.World) {
     world.removeBody(d.body)
   }
   for (const d of dominoes) {
-    // Create new kinematic body
+    // Create new kinematic body at correct height
     const newBody = createDominoBody()
-    newBody.position.set(d.data.x, 0, d.data.z)
+    newBody.position.set(d.data.x, DOMINO_H / 2, d.data.z)
     newBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), d.data.rotation)
     d.body = newBody
     world.addBody(newBody)
 
-    // Reset mesh
+    // Reset mesh to match
     d.mesh.position.set(d.data.x, DOMINO_H / 2, d.data.z)
     d.mesh.rotation.y = d.data.rotation
   }
