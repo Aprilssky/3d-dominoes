@@ -158,9 +158,9 @@ export function toppleDominoAt(target: DominoObject, impulseStrength = 0.25) {
   // Fall direction: local Z axis of domino (thin side)
   // Just a horizontal push at the top — gravity + collision does the rest
   const dir = new CANNON.Vec3(
-    Math.sin(rot),
+    -Math.sin(rot),
     0,
-    Math.cos(rot)
+    -Math.cos(rot)
   )
   dir.normalize()
   dir.scale(impulseStrength, dir)

@@ -7,6 +7,11 @@ const scene = new DominoScene(container)
 
 // ======== UI Bindings ========
 
+function formatRotation(rad: number): string {
+  const deg = Math.round(rad * 180 / Math.PI)
+  return deg === 0 ? '0°' : `↻${deg}°`
+}
+
 scene.setCallbacks({
   onCountChange: (n) => {
     document.getElementById('domino-count')!.textContent = `🁎 ${n}`
@@ -25,10 +30,15 @@ scene.setCallbacks({
       if (activeTool) {
         activeTool.click()
       } else {
-        modeLabel.textContent = '放置模式'
+        modeLabel.textContent = `放置模式 · 方向 ${formatRotation(scene.getPendingRotation())}`
       }
     }
     document.getElementById('btn-reset-physics')!.style.display = playing ? 'inline-block' : 'none'
+  },
+  onRotationChange: (angle) => {
+    const modeLabel = document.getElementById('mode-label')!
+    if (!modeLabel.textContent?.startsWith('放置')) return
+    modeLabel.textContent = `放置模式 · 方向 ${formatRotation(angle)}`
   },
 })
 
@@ -42,7 +52,7 @@ toolBtns.forEach(btn => {
     btn.classList.add('active')
 
     const labels: Record<ToolMode, string> = {
-      place: '放置模式 — 点击地面放骨牌',
+      place: `放置模式 · 方向 ${formatRotation(scene.getPendingRotation())}`,
       delete: '删除模式 — 单击选中/双击删除',
       move: '移动模式',
     }

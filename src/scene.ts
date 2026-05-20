@@ -43,18 +43,27 @@ export class DominoScene {
   private selectedDomino: DominoObject | null = null
   private selectionRing: THREE.Mesh | null = null
 
+  // Placement rotation
+  private pendingRotation = 0
+
   // Callbacks
   private onCountChange!: (n: number) => void
   private onPlayChange!: (playing: boolean) => void
+  private onRotationChange!: (angle: number) => void
 
   constructor(container: HTMLElement) {
     this.init(container)
     this.startLoop()
   }
 
-  setCallbacks(cbs: { onCountChange: (n: number) => void; onPlayChange: (playing: boolean) => void }) {
+  setCallbacks(cbs: {
+    onCountChange: (n: number) => void
+    onPlayChange: (playing: boolean) => void
+    onRotationChange?: (angle: number) => void
+  }) {
     this.onCountChange = cbs.onCountChange
     this.onPlayChange = cbs.onPlayChange
+    this.onRotationChange = cbs.onRotationChange ?? (() => {})
   }
 
   // ======== Init ========
@@ -166,6 +175,12 @@ export class DominoScene {
       if (e.key === '1') this.setTool('place')
       if (e.key === '2') this.setTool('delete')
       if (e.key === '3') this.setTool('move')
+      if (e.key === 'r' || e.key === 'R') {
+        if (this.toolMode === 'place') {
+          this.pendingRotation = (this.pendingRotation + Math.PI / 4) % (Math.PI * 2)
+          this.onRotationChange(this.pendingRotation)
+        }
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (this.selectedDomino) {
           this.deleteDomino(this.selectedDomino)
@@ -214,12 +229,17 @@ export class DominoScene {
     if (e.button !== 0) return
 
     // --- PLAY MODE: click domino to topple ---
-    if (this.isPlaying && !this.toppleTriggered) {
+    if (this.isPlaying) {
       const domino = this.getDominoIntersection(e.clientX, e.clientY)
       if (domino) {
-        activatePhysics(this.dominoes, this.world)
+        if (!this.toppleTriggered) {
+          activatePhysics(this.dominoes, this.world)
+          this.toppleTriggered = true
+        }
         toppleDominoAt(domino, 0.25)
-        this.toppleTriggered = true
+        // Clean up hover afterimage
+        this.removeHoverHighlight()
+        this.hoveredDomino = null
       }
       return
     }
@@ -234,7 +254,7 @@ export class DominoScene {
       } else {
         const pos = this.getGroundIntersection(e.clientX, e.clientY)
         if (pos) {
-          this.placeDomino(pos.x, pos.z)
+          this.placeDomino(pos.x, pos.z, this.pendingRotation)
         }
       }
     } else if (this.toolMode === 'delete') {
@@ -266,7 +286,7 @@ export class DominoScene {
 
   private onMouseMove(e: MouseEvent) {
     // --- Play mode hover highlight ---
-    if (this.isPlaying && !this.toppleTriggered) {
+    if (this.isPlaying) {
       const domino = this.getDominoIntersection(e.clientX, e.clientY)
       if (domino !== this.hoveredDomino) {
         this.removeHoverHighlight()
@@ -450,6 +470,7 @@ export class DominoScene {
   }
 
   getTool(): ToolMode { return this.toolMode }
+  getPendingRotation(): number { return this.pendingRotation }
 
   // ======== Save/Load/Export/Import ========
   save() {
