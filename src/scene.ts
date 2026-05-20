@@ -218,7 +218,7 @@ export class DominoScene {
       const domino = this.getDominoIntersection(e.clientX, e.clientY)
       if (domino) {
         activatePhysics(this.dominoes, this.world)
-        toppleDominoAt(domino, 1.8)
+        toppleDominoAt(domino, 0.25)
         this.toppleTriggered = true
       }
       return

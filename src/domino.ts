@@ -153,13 +153,13 @@ export function activatePhysics(dominoes: DominoObject[], world: CANNON.World) {
  * Apply topple impulse to a specific domino in its facing direction.
  * Domino's thin side is local Z axis → world direction = (sin(rot), 0, cos(rot))
  */
-export function toppleDominoAt(target: DominoObject, impulseStrength = 0.8) {
+export function toppleDominoAt(target: DominoObject, impulseStrength = 0.25) {
   const rot = target.data.rotation
   // Fall direction: local Z axis of domino (thin side)
   // Just a horizontal push at the top — gravity + collision does the rest
   const dir = new CANNON.Vec3(
     Math.sin(rot),
-    0.1,
+    0,
     Math.cos(rot)
   )
   dir.normalize()
