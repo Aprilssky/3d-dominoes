@@ -2,11 +2,11 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import * as CANNON from 'cannon-es'
 import {
-  DOMINO_W, DOMINO_H, DOMINO_D, DOMINO_GAP,
-  buildDomino, removeDomino, randomColor, generateId, resetIdCounter, syncIdCounter,
+  buildDomino, removeDomino, generateId, resetIdCounter, syncIdCounter,
   activatePhysics, toppleDominoAt, resetPhysics, createPhysicsWorld,
-  DominoData, DominoObject,
+  DominoData, DominoObject, dominoW,
 } from './domino'
+import { config, getSelectedColor } from './config'
 import { saveToLocal, loadFromLocal, exportToFile, importFromFile } from './storage'
 
 export type ToolMode = 'place' | 'delete' | 'move'
@@ -66,20 +66,29 @@ export class DominoScene {
     this.onRotationChange = cbs.onRotationChange ?? (() => {})
   }
 
+  /** Rebuild physics world with current config friction/restitution */
+  rebuildPhysicsWorld() {
+    // Remove old world bodies (except dominoes — those will be re-added)
+    for (const d of this.dominoes) {
+      this.world.removeBody(d.body)
+    }
+    this.world = createPhysicsWorld()
+    for (const d of this.dominoes) {
+      this.world.addBody(d.body)
+    }
+  }
+
   // ======== Init ========
   private init(container: HTMLElement) {
-    // Scene
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x1a1a2e)
     this.scene.fog = new THREE.Fog(0x1a1a2e, 20, 40)
 
-    // Camera
     const aspect = container.clientWidth / container.clientHeight
     this.camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 100)
     this.camera.position.set(8, 6, 8)
     this.camera.lookAt(0, 0, 0)
 
-    // Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setSize(container.clientWidth, container.clientHeight)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -89,7 +98,7 @@ export class DominoScene {
     this.renderer.toneMappingExposure = 1.2
     container.appendChild(this.renderer.domElement)
 
-    // Controls
+    // OrbitControls: middle button rotates, right button pans
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.1
@@ -97,20 +106,19 @@ export class DominoScene {
     this.controls.maxDistance = 30
     this.controls.maxPolarAngle = Math.PI / 2.05
     this.controls.target.set(0, 0.5, 0)
+    // <<< MIDDLE BUTTON ROTATE, RIGHT BUTTON ZOOM >>>
+    this.controls.mouseButtons = {
+      LEFT: null,
+      MIDDLE: THREE.MOUSE.ROTATE,
+      RIGHT: THREE.MOUSE.DOLLY,
+    }
 
-    // Physics
     this.world = createPhysicsWorld()
 
-    // Lights
     this.setupLights()
-
-    // Ground
     this.setupGround()
-
-    // Events
     this.setupEvents()
 
-    // Resize
     window.addEventListener('resize', () => this.onResize(container))
   }
 
@@ -211,7 +219,10 @@ export class DominoScene {
     return intersect
   }
 
-  private getDominoIntersection(clientX: number, clientY: number): DominoObject | null {
+  private getDominoIntersection(
+    clientX: number,
+    clientY: number
+  ): { domino: DominoObject; worldNormal: THREE.Vector3 } | null {
     this.mouse.x = (clientX / this.renderer.domElement.clientWidth) * 2 - 1
     this.mouse.y = -(clientY / this.renderer.domElement.clientHeight) * 2 + 1
     this.raycaster.setFromCamera(this.mouse, this.camera)
@@ -219,8 +230,17 @@ export class DominoScene {
     const meshes = this.dominoes.map(d => d.mesh)
     const intersects = this.raycaster.intersectObjects(meshes)
     if (intersects.length > 0) {
-      const hitMesh = intersects[0].object
-      return this.dominoes.find(d => d.mesh === hitMesh) || null
+      const hit = intersects[0]
+      const mesh = hit.object as THREE.Mesh
+      const domino = this.dominoes.find(d => d.mesh === mesh)
+      if (!domino) return null
+
+      // Transform face normal from local to world space
+      const localNormal = hit.face!.normal.clone()
+      const worldNormal = localNormal.applyQuaternion(mesh.quaternion)
+      worldNormal.normalize()
+
+      return { domino, worldNormal }
     }
     return null
   }
@@ -230,13 +250,20 @@ export class DominoScene {
 
     // --- PLAY MODE: click domino to topple ---
     if (this.isPlaying) {
-      const domino = this.getDominoIntersection(e.clientX, e.clientY)
-      if (domino) {
+      const hit = this.getDominoIntersection(e.clientX, e.clientY)
+      if (hit) {
         if (!this.toppleTriggered) {
           activatePhysics(this.dominoes, this.world)
           this.toppleTriggered = true
         }
-        toppleDominoAt(domino, 0.25)
+        // Push away from the clicked face (fall toward opposite side)
+        const dir = new CANNON.Vec3(
+          -hit.worldNormal.x,
+          0,
+          -hit.worldNormal.z
+        )
+        dir.normalize()
+        toppleDominoAt(hit.domino, dir)
         // Clean up hover afterimage
         this.removeHoverHighlight()
         this.hoveredDomino = null
@@ -258,7 +285,8 @@ export class DominoScene {
         }
       }
     } else if (this.toolMode === 'delete') {
-      const domino = this.getDominoIntersection(e.clientX, e.clientY)
+      const hit = this.getDominoIntersection(e.clientX, e.clientY)
+      const domino = hit?.domino ?? null
       if (domino) {
         if (this.selectedDomino === domino) {
           this.deleteDomino(domino)
@@ -273,7 +301,8 @@ export class DominoScene {
         this.removeSelectionRing()
       }
     } else if (this.toolMode === 'move') {
-      const domino = this.getDominoIntersection(e.clientX, e.clientY)
+      const hit = this.getDominoIntersection(e.clientX, e.clientY)
+      const domino = hit?.domino ?? null
       if (domino) {
         this.selectedDomino = domino
         this.showSelectionRing(domino)
@@ -287,14 +316,14 @@ export class DominoScene {
   private onMouseMove(e: MouseEvent) {
     // --- Play mode hover highlight ---
     if (this.isPlaying) {
-      const domino = this.getDominoIntersection(e.clientX, e.clientY)
+      const hit = this.getDominoIntersection(e.clientX, e.clientY)
+      const domino = hit?.domino ?? null
       if (domino !== this.hoveredDomino) {
         this.removeHoverHighlight()
         if (domino) {
           this.showHoverHighlight(domino)
         }
         this.hoveredDomino = domino
-        // Update cursor
         this.renderer.domElement.style.cursor = domino ? 'pointer' : 'crosshair'
       }
       return
@@ -306,9 +335,9 @@ export class DominoScene {
         const dx = pos.x - this.lineStart.x
         const dz = pos.z - this.lineStart.z
         const dist = Math.sqrt(dx * dx + dz * dz)
-        if (dist > DOMINO_W + DOMINO_GAP) {
+        const spacing = dominoW() + config.gap
+        if (dist > spacing) {
           const angle = Math.atan2(dz, dx)
-          const spacing = DOMINO_W + DOMINO_GAP
           const count = Math.floor(dist / spacing)
           for (let i = 0; i < count; i++) {
             const ratio = (i + 1) / count
@@ -328,7 +357,8 @@ export class DominoScene {
 
   private onDoubleClick(e: MouseEvent) {
     if (this.toolMode === 'delete') {
-      const domino = this.getDominoIntersection(e.clientX, e.clientY)
+      const hit = this.getDominoIntersection(e.clientX, e.clientY)
+      const domino = hit?.domino ?? null
       if (domino) {
         this.deleteDomino(domino)
         if (this.selectedDomino === domino) {
@@ -350,7 +380,7 @@ export class DominoScene {
       id: generateId(),
       x, z,
       rotation: rotation ?? 0,
-      color: randomColor(),
+      color: getSelectedColor(),
     }
 
     const obj = buildDomino(this.scene, this.world, data)
@@ -406,7 +436,10 @@ export class DominoScene {
   // ======== Hover Highlight ========
   private showHoverHighlight(obj: DominoObject) {
     this.removeHoverHighlight()
-    const geo = new THREE.BoxGeometry(DOMINO_W + 0.08, DOMINO_H + 0.08, DOMINO_D + 0.08)
+    const ow = obj.data.w ?? config.width
+    const oh = obj.data.h ?? config.height
+    const od = obj.data.d ?? config.depth
+    const geo = new THREE.BoxGeometry(ow + 0.08, oh + 0.08, od + 0.08)
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -433,7 +466,8 @@ export class DominoScene {
   // ======== Selection Ring ========
   private showSelectionRing(obj: DominoObject) {
     this.removeSelectionRing()
-    const ringGeo = new THREE.RingGeometry(DOMINO_W * 0.6, DOMINO_W * 0.75, 32)
+    const ow = obj.data.w ?? config.width
+    const ringGeo = new THREE.RingGeometry(ow * 0.6, ow * 0.75, 32)
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       side: THREE.DoubleSide,

@@ -15,6 +15,8 @@
         <button class="tool-btn" data-tool="move" title="移动模式 (3)">✋ 移动</button>
       </div>
       <div class="tool-sep"></div>
+      <div class="tool-group color-group"></div>
+      <div class="tool-sep"></div>
       <div class="tool-group">
         <button id="btn-start" class="tool-btn primary" title="推倒！">▶ 推倒</button>
         <button id="btn-reset-physics" class="tool-btn" title="复原">↺ 复原</button>
@@ -28,6 +30,7 @@
       </div>
       <div class="tool-sep"></div>
       <div class="tool-group">
+        <button id="btn-settings" class="tool-btn settings-toggle" title="设置">⚙</button>
         <button id="btn-clear" class="tool-btn danger" title="清空所有">✕ 清空</button>
       </div>
       <div class="tool-spacer"></div>
@@ -36,9 +39,15 @@
         <span id="mode-label">放置模式</span>
       </div>
     </div>
+
+    <div id="settings-panel">
+      <div class="settings-header">⚙ 参数设置</div>
+      <div class="settings-body"></div>
+    </div>
+
     <div id="canvas-container"></div>
     <div id="status-bar">
-      <span>左键放骨牌 · 右键拖动视角 · 滚轮缩放 · Shift拖拽画线 · R键调整方向 · 点「推倒」后点击骨牌触发连锁</span>
+      <span>左键放骨牌 · 中键旋转 · 右键缩放 · Shift画线 · R键方向 · ⚙调参数 · 推倒模式点击骨牌</span>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

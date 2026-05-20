@@ -1,30 +1,16 @@
 import * as THREE from 'three'
 import * as CANNON from 'cannon-es'
-
-// Domino dimensions
-export const DOMINO_W = 0.8    // width (long side)
-export const DOMINO_H = 1.6    // height
-export const DOMINO_D = 0.24   // depth (thickness)
-export const DOMINO_GAP = 0.05 // extra gap between dominoes
-
-// Colors
-const COLORS = [
-  0x6366f1, // indigo
-  0xef4444, // red
-  0x22c55e, // green
-  0xf59e0b, // amber
-  0x3b82f6, // blue
-  0xec4899, // pink
-  0x14b8a6, // teal
-  0xa855f7, // purple
-]
+import { config, getSelectedColor } from './config'
 
 export interface DominoData {
   id: number
   x: number
   z: number
-  rotation: number // radians
+  rotation: number
   color: number
+  w?: number
+  h?: number
+  d?: number
 }
 
 export interface DominoObject {
@@ -32,6 +18,11 @@ export interface DominoObject {
   mesh: THREE.Mesh
   body: CANNON.Body
 }
+
+// Read effective dimensions from data or config
+export function dominoW(d?: DominoData) { return d?.w ?? config.width }
+export function dominoH(d?: DominoData) { return d?.h ?? config.height }
+export function dominoD(d?: DominoData) { return d?.d ?? config.depth }
 
 // --- Physics ---
 export function createPhysicsWorld(): CANNON.World {
@@ -42,8 +33,8 @@ export function createPhysicsWorld(): CANNON.World {
 
   const defaultMat = new CANNON.Material('default')
   const contactMat = new CANNON.ContactMaterial(defaultMat, defaultMat, {
-    friction: 0.5,
-    restitution: 0.05,
+    friction: config.friction,
+    restitution: config.restitution,
   })
   world.addContactMaterial(contactMat)
 
@@ -59,8 +50,10 @@ export function createPhysicsWorld(): CANNON.World {
 let nextId = 1
 
 export function createDominoMesh(color: number): THREE.Mesh {
-  const geo = new THREE.BoxGeometry(DOMINO_W, DOMINO_H, DOMINO_D)
-  // Round edges slightly with bevel-like geometry
+  const w = config.width
+  const h = config.height
+  const d = config.depth
+  const geo = new THREE.BoxGeometry(w, h, d)
   const mat = new THREE.MeshPhysicalMaterial({
     color,
     roughness: 0.4,
@@ -74,17 +67,17 @@ export function createDominoMesh(color: number): THREE.Mesh {
 }
 
 export function createDominoBody(): CANNON.Body {
+  const w = config.width
+  const h = config.height
+  const d = config.depth
   const mat = new CANNON.Material('domino')
   const body = new CANNON.Body({
-    mass: 0.5,
+    mass: config.mass,
     material: mat,
     linearDamping: 0.1,
-    angularDamping: 0.6,
-    shape: new CANNON.Box(
-      new CANNON.Vec3(DOMINO_W / 2, DOMINO_H / 2, DOMINO_D / 2)
-    ),
+    angularDamping: config.angularDamping,
+    shape: new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2)),
   })
-  // Start as kinematic (static) — only dynamic when toppled
   body.type = CANNON.Body.KINEMATIC
   return body
 }
@@ -94,16 +87,24 @@ export function buildDomino(
   world: CANNON.World,
   data: DominoData
 ): DominoObject {
+  // Store current dimensions in data for persistence
+  data.w = data.w ?? config.width
+  data.h = data.h ?? config.height
+  data.d = data.d ?? config.depth
+
   const mesh = createDominoMesh(data.color)
   const body = createDominoBody()
 
-  // Body centered at DOMINO_H/2 so its bottom touches ground (y=0)
-  body.position.set(data.x, DOMINO_H / 2, data.z)
+  const h2 = data.h / 2
+  body.position.set(data.x, h2, data.z)
   body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), data.rotation)
 
-  // Mesh at same position as body (center of domino)
-  mesh.position.set(data.x, DOMINO_H / 2, data.z)
+  mesh.position.set(data.x, h2, data.z)
   mesh.rotation.y = data.rotation
+
+  // Use stored dimensions for mesh
+  mesh.geometry.dispose()
+  mesh.geometry = new THREE.BoxGeometry(data.w, data.h, data.d)
 
   scene.add(mesh)
   world.addBody(body)
@@ -120,10 +121,6 @@ export function removeDomino(obj: DominoObject, scene: THREE.Scene, world: CANNO
   } else {
     obj.mesh.material.dispose()
   }
-}
-
-export function randomColor(): number {
-  return COLORS[Math.floor(Math.random() * COLORS.length)]
 }
 
 export function generateId(): number {
@@ -143,32 +140,25 @@ export function syncIdCounter(maxId: number) {
 export function activatePhysics(dominoes: DominoObject[], world: CANNON.World) {
   for (const d of dominoes) {
     d.body.type = CANNON.Body.DYNAMIC
-    d.body.mass = 0.5
+    d.body.mass = config.mass
     d.body.updateMassProperties()
     d.body.wakeUp()
   }
 }
 
 /**
- * Apply topple impulse to a specific domino in its facing direction.
- * Domino's thin side is local Z axis → world direction = (sin(rot), 0, cos(rot))
+ * Apply topple impulse to a specific domino.
+ * @param target - domino to push
+ * @param direction - world-space push direction (normalized)
  */
-export function toppleDominoAt(target: DominoObject, impulseStrength = 0.25) {
-  const rot = target.data.rotation
-  // Fall direction: local Z axis of domino (thin side)
-  // Just a horizontal push at the top — gravity + collision does the rest
-  const dir = new CANNON.Vec3(
-    -Math.sin(rot),
-    0,
-    -Math.cos(rot)
-  )
-  dir.normalize()
-  dir.scale(impulseStrength, dir)
+export function toppleDominoAt(target: DominoObject, direction: CANNON.Vec3) {
+  const h = dominoH(target.data)
+  const dir = direction.clone()
+  dir.scale(config.impulseStrength, dir)
 
-  // Apply impulse near the top to tip it over
   const wp = new CANNON.Vec3(
     target.body.position.x,
-    DOMINO_H * 0.85,
+    h * 0.85,
     target.body.position.z
   )
   target.body.applyImpulse(dir, wp)
@@ -179,15 +169,14 @@ export function resetPhysics(dominoes: DominoObject[], world: CANNON.World) {
     world.removeBody(d.body)
   }
   for (const d of dominoes) {
-    // Create new kinematic body at correct height
+    const h = dominoH(d.data)
     const newBody = createDominoBody()
-    newBody.position.set(d.data.x, DOMINO_H / 2, d.data.z)
+    newBody.position.set(d.data.x, h / 2, d.data.z)
     newBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), d.data.rotation)
     d.body = newBody
     world.addBody(newBody)
 
-    // Reset mesh to match
-    d.mesh.position.set(d.data.x, DOMINO_H / 2, d.data.z)
+    d.mesh.position.set(d.data.x, h / 2, d.data.z)
     d.mesh.rotation.y = d.data.rotation
   }
 }
