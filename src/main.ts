@@ -85,7 +85,7 @@ const SETTINGS = [
   { key: 'friction' as const, label: '摩擦', min: 0, max: 2, step: 0.05 },
   { key: 'restitution' as const, label: '弹性', min: 0, max: 1, step: 0.05 },
   { key: 'angularDamping' as const, label: '角阻尼', min: 0, max: 1, step: 0.05 },
-  { key: 'impulseStrength' as const, label: '推力', min: 0.05, max: 1.5, step: 0.05 },
+  { key: 'impulseStrength' as const, label: '推力', min: 0.05, max: 3.0, step: 0.05 },
 ]
 
 const settingsBody = settingsPanel.querySelector('.settings-body')!

@@ -8,10 +8,10 @@ export const config = {
 
   // 物理
   mass: 0.5,
-  friction: 0.5,
-  restitution: 0.05,
-  angularDamping: 0.6,
-  impulseStrength: 0.25,
+  friction: 0.3,
+  restitution: 0.15,
+  angularDamping: 0.1,
+  impulseStrength: 1.0,
 
   // 颜色
   selectedColorIdx: 0,
