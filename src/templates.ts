@@ -22,8 +22,8 @@ const W = () => dominoW()
 // ======== Spiral ========
 function generateSpiral(): DominoData[] {
   const result: DominoData[] = []
-  const spacing = W() + 0.1
-  const turns = 3.5
+  const spacing = W() + 0.02
+  const turns = 4
   const total = 80
   const color = colorArray()
 
@@ -48,7 +48,7 @@ function generateSpiral(): DominoData[] {
 // ======== Snake ========
 function generateSnake(): DominoData[] {
   const result: DominoData[] = []
-  const spacing = W() + 0.05
+  const spacing = W() + 0.02
   const segmentLen = 8
   const rows = 4
   const color = colorArray()
@@ -76,7 +76,7 @@ function generateSnake(): DominoData[] {
 // ======== Pyramid ========
 function generatePyramid(): DominoData[] {
   const result: DominoData[] = []
-  const spacing = W() + 0.05
+  const spacing = W() + 0.02
   const rows = 10
   const color = colorArray()
   let idx = 0
@@ -136,7 +136,7 @@ function generateHeart(): DominoData[] {
 // ======== Concentric Circles ========
 function generateCircles(): DominoData[] {
   const result: DominoData[] = []
-  const spacing = W() + 0.15
+  const spacing = W() + 0.06
   const rings = 4
   const color = colorArray()
   let idx = 0
@@ -168,8 +168,8 @@ function generateCircles(): DominoData[] {
 function generateCross(): DominoData[] {
   const result: DominoData[] = []
   const color = colorArray()
-  const spacing = W() + 0.05
-  const armLen = 6
+  const spacing = W() + 0.02
+  const armLen = 7
 
   for (let i = 0; i < armLen * 2 + 1; i++) {
     const offset = (i - armLen) * spacing

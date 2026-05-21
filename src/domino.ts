@@ -31,6 +31,8 @@ export function createPhysicsWorld(): CANNON.World {
   world.gravity.set(0, -9.82, 0)
   world.broadphase = new CANNON.SAPBroadphase(world)
   world.allowSleep = true
+  // More solver iterations for accurate contact resolution (domino chains need it)
+  ;(world.solver as any).iterations = 10
 
   const defaultMat = new CANNON.Material('default')
   const contactMat = new CANNON.ContactMaterial(defaultMat, defaultMat, {
