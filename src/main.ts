@@ -123,6 +123,37 @@ SETTINGS.forEach(s => {
   settingsBody.appendChild(row)
 })
 
+// ======== Templates ========
+const templateMenu = document.getElementById('template-menu')!
+const btnTemplates = document.getElementById('btn-templates')!
+
+// Build menu items
+const templates = scene.getTemplates()
+for (const tpl of templates) {
+  const item = document.createElement('button')
+  item.className = 'template-menu-item'
+  item.innerHTML = `<span class="tpl-icon">${tpl.icon}</span> ${tpl.name}`
+  item.addEventListener('click', () => {
+    templateMenu.classList.remove('open')
+    scene.applyTemplate(tpl.name)
+    showToast(`📐 已生成「${tpl.name}」`)
+  })
+  templateMenu.appendChild(item)
+}
+
+// Toggle dropdown
+btnTemplates.addEventListener('click', (e) => {
+  e.stopPropagation()
+  templateMenu.classList.toggle('open')
+})
+
+// Close dropdown when clicking outside
+document.addEventListener('click', () => {
+  templateMenu.classList.remove('open')
+})
+
+templateMenu.addEventListener('click', (e) => e.stopPropagation())
+
 // ======== Tool buttons ========
 const toolBtns = document.querySelectorAll<HTMLButtonElement>('.tool-btn[data-tool]')
 toolBtns.forEach(btn => {

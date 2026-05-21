@@ -4,10 +4,13 @@ import * as CANNON from 'cannon-es'
 import {
   buildDomino, removeDomino, generateId, resetIdCounter, syncIdCounter,
   activatePhysics, toppleDominoAt, resetPhysics, createPhysicsWorld,
+  setupBodyCollisionSound,
   DominoData, DominoObject, dominoW,
 } from './domino'
 import { config, getSelectedColor } from './config'
 import { saveToLocal, loadFromLocal, exportToFile, importFromFile } from './storage'
+import { playPlace, playDelete } from './sound'
+import { TEMPLATES, TemplateDef } from './templates'
 
 export type ToolMode = 'place' | 'delete' | 'move'
 
@@ -386,6 +389,7 @@ export class DominoScene {
     const obj = buildDomino(this.scene, this.world, data)
     this.dominoes.push(obj)
     this.onCountChange?.(this.dominoes.length)
+    playPlace()
   }
 
   deleteDomino(obj: DominoObject) {
@@ -394,6 +398,7 @@ export class DominoScene {
     removeDomino(obj, this.scene, this.world)
     this.dominoes.splice(idx, 1)
     this.onCountChange?.(this.dominoes.length)
+    playDelete()
   }
 
   clearAll() {
@@ -412,10 +417,36 @@ export class DominoScene {
     this.onCountChange?.(0)
   }
 
+  // ======== Templates ========
+  applyTemplate(templateName: string) {
+    if (this.isPlaying) return
+    const tmpl = TEMPLATES.find(t => t.name === templateName)
+    if (!tmpl) return
+
+    this.clearAll()
+    const data = tmpl.generate()
+    let maxId = 0
+    for (const d of data) {
+      if (d.id > maxId) maxId = d.id
+      const obj = buildDomino(this.scene, this.world, d)
+      this.dominoes.push(obj)
+    }
+    syncIdCounter(maxId)
+    this.onCountChange?.(this.dominoes.length)
+  }
+
+  getTemplates(): TemplateDef[] {
+    return TEMPLATES
+  }
+
   startPlay() {
     if (this.dominoes.length === 0 || this.isPlaying) return
     this.isPlaying = true
     this.toppleTriggered = false
+    // Set up collision sound listeners
+    for (const d of this.dominoes) {
+      setupBodyCollisionSound(d.body)
+    }
     this.onPlayChange?.(true)
     this.renderer.domElement.style.cursor = 'crosshair'
   }

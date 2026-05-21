@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import * as CANNON from 'cannon-es'
 import { config, getSelectedColor } from './config'
+import { playImpact } from './sound'
 
 export interface DominoData {
   id: number
@@ -151,6 +152,26 @@ export function activatePhysics(dominoes: DominoObject[], world: CANNON.World) {
  * @param target - domino to push
  * @param direction - world-space push direction (normalized)
  */
+/**
+ * Set up collision event listener on a body for sound effects.
+ * Only fires when body is dynamic (physics active).
+ */
+export function setupBodyCollisionSound(body: CANNON.Body) {
+  body.addEventListener(CANNON.Body.COLLIDE_EVENT_NAME, (event: any) => {
+    if (body.type !== CANNON.Body.DYNAMIC) return
+    try {
+      const contact = event.contact
+      const impactVel = contact.getImpactVelocityAlongNormal()
+      if (Math.abs(impactVel) > 0.5) {
+        const strength = Math.min(1, Math.abs(impactVel) / 8)
+        playImpact(strength)
+      }
+    } catch {
+      // ignore if contact info isn't available
+    }
+  })
+}
+
 export function toppleDominoAt(target: DominoObject, direction: CANNON.Vec3) {
   const h = dominoH(target.data)
   const dir = direction.clone()
